@@ -55,7 +55,7 @@ docker run --rm -p 8080:8080 -e PORT=8080 calendar-slot-code:local
 
 ### 🌐 Деплой на Railway
 
-Стенд развёрнут на [Railway](https://railway.com/) из этого репозитория:
+Стенд развёрнут на [Railway](https://railway.com/) из проекта 386; в этом репозитории лежат те же настройки деплоя (`Dockerfile`, `railway.json`, `opencode.json`), поэтому его можно пересобрать отсюда:
 
 - **Публичный URL:** https://web-main-production-bb7a7b4d.up.railway.app
 - **Сборка:** корневой `Dockerfile`; Railway не использует собственный билдер.
