@@ -1,0 +1,357 @@
+openapi: 3.1.0
+info:
+  title: Call Calendar API
+  description: Simplified Cal.com-like call booking service.
+  version: 0.0.0
+tags: []
+paths:
+  /available-slots:
+    get:
+      operationId: listAvailableSlots
+      parameters:
+        - name: meeting_type_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TimeSlot'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /bookings:
+    get:
+      operationId: listBookings
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Booking'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      operationId: createBooking
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+  /config:
+    get:
+      operationId: getConfig
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /health:
+    get:
+      operationId: getHealth
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /meeting-types:
+    get:
+      operationId: listMeetingTypes
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MeetingType'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      operationId: createMeetingType
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeetingType'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMeetingTypeRequest'
+components:
+  schemas:
+    Booking:
+      type: object
+      required:
+        - id
+        - meeting_type_id
+        - start_time
+        - end_time
+        - guest_name
+        - guest_email
+      properties:
+        id:
+          type: string
+          format: uuid
+        meeting_type_id:
+          type: string
+          format: uuid
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        guest_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        guest_email:
+          type: string
+          maxLength: 254
+          format: email
+    ConfigResponse:
+      type: object
+      required:
+        - timezone
+        - working_hours_start
+        - working_hours_end
+        - slot_step_minutes
+        - booking_window_days
+        - today
+      properties:
+        timezone:
+          type: string
+          description: IANA timezone of the calendar owner.
+        working_hours_start:
+          type: string
+          description: Working day start in HH:MM.
+        working_hours_end:
+          type: string
+          description: Working day end in HH:MM.
+        slot_step_minutes:
+          type: integer
+          format: int32
+          minimum: 1
+        booking_window_days:
+          type: integer
+          format: int32
+          minimum: 1
+        today:
+          type: string
+          description: Current date in the owner timezone as YYYY-MM-DD.
+    CreateBookingRequest:
+      type: object
+      required:
+        - meeting_type_id
+        - start_time
+        - guest_name
+        - guest_email
+      properties:
+        meeting_type_id:
+          type: string
+          format: uuid
+        start_time:
+          type: string
+          format: date-time
+        guest_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        guest_email:
+          type: string
+          maxLength: 254
+          format: email
+    CreateMeetingTypeRequest:
+      type: object
+      required:
+        - title
+        - description
+        - duration_minutes
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        duration_minutes:
+          type: integer
+          format: int32
+          minimum: 5
+          maximum: 480
+    ErrorCode:
+      type: string
+      enum:
+        - invalid_request
+        - invalid_slot
+        - meeting_type_not_found
+        - slot_taken
+        - not_found
+        - method_not_allowed
+        - internal_error
+      description: Machine-readable error codes returned by the API.
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+    MeetingType:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - duration_minutes
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        duration_minutes:
+          type: integer
+          format: int32
+          minimum: 5
+          maximum: 480
+    TimeSlot:
+      type: object
+      required:
+        - start_time
+        - end_time
+      properties:
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+servers:
+  - url: http://localhost:8081
+    description: Local development
+    variables: {}
