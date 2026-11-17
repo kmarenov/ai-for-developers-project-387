@@ -152,7 +152,7 @@ gh issue create --title "Проверка агента" --body "Тестовый
 gh issue comment <номер> --body "/oc explain this issue"
 ```
 
-Ожидается комментарий от приложения и прогон `opencode` в Actions. Если OIDC-обмен не проходит (приложение установлено не на этот репозиторий), воркфлоу переключается на `use_github_token: true`: тогда `GITHUB_TOKEN` передаётся в `env`, ему нужны `contents: write`, `pull-requests: write`, `issues: write`, а checkout идёт с credentials по умолчанию и настроенным Git-пользователем.
+Ожидается комментарий от приложения и прогон `opencode` в Actions. Если OIDC-обмен не проходит (приложение установлено не на этот репозиторий), воркфлоу нужно переключить на `use_github_token: true`: тогда `GITHUB_TOKEN` передаётся в `env`, ему нужны `contents: write`, `pull-requests: write`, `issues: write`, а checkout идёт с credentials по умолчанию и настроенным Git-пользователем.
 
 Остановка и бюджет:
 
