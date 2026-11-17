@@ -109,6 +109,57 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
   -d '{"title":"Демо-встреча 30 минут","description":"Проверка публичного стенда","duration_minutes":30}'
 ```
 
+## 🤖 Агент в GitHub
+
+[OpenCode](https://opencode.ai/docs/github/) подключён к репозиторию как GitHub App: команда в issue, PR или в комментарии к строке diff запускает агента внутри GitHub Actions, а ответ появляется комментарием от имени приложения. Раннер использует тот же `AGENTS.md`, `docs/agents/` и скиллы из `.opencode/skills/`, что и локальный агент.
+
+- **Воркфлоу:** `.github/workflows/opencode.yml`. Результаты — комментарий в issue/PR и прогон в **Actions → opencode**.
+- **События:** `issue_comment` (обсуждение issue или PR) и `pull_request_review_comment` (комментарий к строке diff), у обоих `types: [created]` — редактирование комментария повторный запуск не вызывает. Воркфлоу всегда берётся из `main`, поэтому изменения в нём начинают работать только после мержа.
+- **Команды (`mentions`):** `/oc` и `/opencode` — набор OpenCode по умолчанию, задан в воркфлоу явно.
+- **Модель:** `opencode/deepseek-v4.1-flash`. Ключ провайдера лежит только в секрете `OPENCODE_API_KEY` (Settings → Secrets and variables → Actions), в файлах и логах его нет.
+- **Назначение:** объяснить issue, собрать спеку и тикеты (`to-spec`, `to-tickets`), реализовать спеку (`implement-spec`), поправить код в PR.
+- **Публикация сессий:** `share: false` — репозиторий публичный, поэтому сессии агента не публикуются и ссылки на них в ответе нет.
+
+Кого агент слушает:
+
+- только участника с `author_association` `OWNER`, `MEMBER` или `COLLABORATOR` — проверка в `if` срабатывает до запуска шагов;
+- команды ботов (`github.event.comment.user.type == 'Bot'`) игнорируются, иначе агент отвечал бы на собственные сообщения;
+- недоверенные PR из fork не получают секреты: воркфлоу не использует `pull_request_target` и проверяет автора до checkout, а `actions/checkout` берёт основную ветку.
+
+Права, тайм-аут и параллельность:
+
+| Настройка                                | Значение                 | Зачем                                                |
+| :--------------------------------------- | :----------------------- | :--------------------------------------------------- |
+| `contents: read`                         | чтение репозитория       | checkout; push и комментарии делает токен GitHub App |
+| `id-token: write`                        | OIDC-обмен               | токен GitHub App вместо `persist-credentials`        |
+| `issues: write`                          | `GH_TOKEN` для `gh`      | скиллы читают и публикуют issue                      |
+| `pull-requests: write`                   | `GH_TOKEN` для `gh`      | чтение PR и драфт-PR на `implement-spec`             |
+| `persist-credentials: false`             | checkout без credentials | push только токеном приложения                       |
+| `timeout-minutes: 30`                    | тайм-аут задания         | зависший прогон не тратит токены бесконечно          |
+| `concurrency: opencode-<номер issue/PR>` | без отмены               | один агент на обсуждение, повторные команды ждут     |
+
+Скиллы на раннере:
+
+- Раннер стартует с чистого окружения, поэтому проектные копии лежат в `.opencode/skills/`: `to-spec`, `to-tickets`, `implement-spec` и их зависимости `tdd`, `code-review`, `codebase-design`. Каталоги скопированы из [mattpocock/skills](https://github.com/mattpocock/skills) как есть: глобальная установка `~/.agents/skills` на раннере недоступна, поэтому для CI нужны именно файлы в репозитории.
+- Настройки трекера (`AGENTS.md`, `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`) едут вместе с кодом, поэтому на раннере работают `gh issue`, лейблы триажа и правила репозитория.
+- Новый скилл добавляется копированием каталога с `SKILL.md` в `.opencode/skills/<id>/` и коммитом. Скилл, установленный только глобально, в GitHub Actions не появится. Форматтер `oxfmt` каталог `.opencode/skills/**` не трогает, чтобы копии не расходились с оригиналом.
+- Скилл вызывается текстом команды, например: `/oc запусти скилл to-spec по обсуждению этого issue`. Вопросы и решения остаются в обсуждении, и следующая сессия прочитает их перед работой.
+
+Проверка после мержа:
+
+```bash
+gh issue create --title "Проверка агента" --body "Тестовый issue для /oc"
+gh issue comment <номер> --body "/oc explain this issue"
+```
+
+Ожидается комментарий от приложения и прогон `opencode` в Actions. Если OIDC-обмен не проходит (приложение установлено не на этот репозиторий), воркфлоу переключается на `use_github_token: true`: тогда `GITHUB_TOKEN` передаётся в `env`, ему нужны `contents: write`, `pull-requests: write`, `issues: write`, а checkout идёт с credentials по умолчанию и настроенным Git-пользователем.
+
+Остановка и бюджет:
+
+- **Cancel workflow** останавливает текущий прогон, **Disable workflow** отключает будущие. Уже отправленный запрос к провайдеру может завершиться по его правилам.
+- Каждый вызов расходует токены: бюджет задаётся в кабинете провайдера, ключ при необходимости отзывается там же.
+- Демонстрация cancel/disable и отзыва ключа для сдачи не требуется.
+
 ## 🛠 Технологический стек
 
 ### Backend
