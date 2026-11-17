@@ -113,9 +113,9 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 
 [OpenCode](https://opencode.ai/docs/github/) подключён к репозиторию как GitHub App: команда в issue, PR или в комментарии к строке diff запускает агента внутри GitHub Actions, а ответ появляется комментарием от имени приложения. Раннер использует тот же `AGENTS.md`, `docs/agents/` и скиллы из `.opencode/skills/`, что и локальный агент.
 
-- **Воркфлоу:** `.github/workflows/opencode.yml`. Результаты — комментарий в issue/PR и прогон в **Actions → opencode**.
+- **Воркфлоу:** `.github/workflows/opencode.yml`. Результаты — ответный комментарий в issue/PR со ссылкой `[github run]` и сам прогон в **Actions → opencode** (workflow `opencode`): по ссылке открываются шаги и логи.
 - **События:** `issue_comment` (обсуждение issue или PR) и `pull_request_review_comment` (комментарий к строке diff), у обоих `types: [created]` — редактирование комментария повторный запуск не вызывает. Воркфлоу всегда берётся из `main`, поэтому изменения в нём начинают работать только после мержа.
-- **Команды (`mentions`):** `/oc` и `/opencode` — набор OpenCode по умолчанию, задан в воркфлоу явно.
+- **Команды (`mentions`):** `/oc` и `/opencode` — набор OpenCode по умолчанию, задан в воркфлоу явно. Поиск идёт по подстроке: команда срабатывает в любом месте текста, поэтому цитата `/oc` тоже запускает агента.
 - **Модель:** `opencode/deepseek-v4.1-flash`. Ключ провайдера лежит только в секрете `OPENCODE_API_KEY` (Settings → Secrets and variables → Actions), в файлах и логах его нет.
 - **Назначение:** объяснить issue, собрать спеку и тикеты (`to-spec`, `to-tickets`), реализовать спеку (`implement-spec`), поправить код в PR.
 - **Публикация сессий:** `share: false` — репозиторий публичный, поэтому сессии агента не публикуются и ссылки на них в ответе нет.
