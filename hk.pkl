@@ -13,6 +13,7 @@ steps {
       "pnpm-lock.yaml",
       ".mise/locks/**",
       ".github/workflows/hexlet-check.yml",
+      ".opencode/skills/**",
     )
   }
   ["oxlint"] = (Builtins.ox_lint) {
