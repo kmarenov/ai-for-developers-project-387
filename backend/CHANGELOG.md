@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.0](https://github.com/kmarenov/ai-for-developers-project-387/compare/backend/v1.0.0...backend/v1.1.0) (2026-11-18)
+
+
+### Features
+
+* добавить тему разговора в контракт и API брони ([#7](https://github.com/kmarenov/ai-for-developers-project-387/issues/7)) ([b7a4d9b](https://github.com/kmarenov/ai-for-developers-project-387/commit/b7a4d9b2c5dfee0354822c5bd1f5d5c72533d8f4))
+* тема разговора в записи ([#6](https://github.com/kmarenov/ai-for-developers-project-387/issues/6)) ([80a0cee](https://github.com/kmarenov/ai-for-developers-project-387/commit/80a0cee1187c1be847640f07919a8591de368d24))
+
+
+### Bug Fixes
+
+* нормализовать null-тему и считать лимит в Unicode ([#7](https://github.com/kmarenov/ai-for-developers-project-387/issues/7)) ([63846a5](https://github.com/kmarenov/ai-for-developers-project-387/commit/63846a5ef8fdea0903377c271dab07a22dba8d61))
+
 ## 1.0.0 (2026-11-14)
 
 
