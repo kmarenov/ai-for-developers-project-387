@@ -77,6 +77,10 @@ description = "Run Playwright E2E against a real backend and frontend"
 raw_args = true
 run = "pnpm exec playwright test"
 
+[tasks.audit]
+description = "Run the Lighthouse audit locally and save the report under audit/"
+run = "bash scripts/audit/collect.sh \"${APP_URL:-http://localhost:8081}\" audit"
+
 [tasks.check]
 description = "Run all checks: format, lint, typecheck, unit tests, E2E"
 run = ["hk check --all", "mise run test:e2e"]

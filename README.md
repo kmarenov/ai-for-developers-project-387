@@ -111,7 +111,7 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 
 ## 🤖 Агент в GitHub
 
-[OpenCode](https://opencode.ai/docs/github/) подключён к репозиторию: команда в issue, PR или в комментарии к строке diff запускает интерактивного агента, а каждое изменение PR дополнительно проходит независимое авторевью. Раннер использует тот же `AGENTS.md`, `docs/agents/`, `REVIEW.md` и скиллы из `.opencode/skills/`, что и локальный агент.
+[OpenCode](https://opencode.ai/docs/github/) подключён к репозиторию: команда в issue, PR или в комментарии к строке diff запускает интерактивного агента, каждое изменение PR дополнительно проходит независимое авторевью, а по расписанию работает аудит Lighthouse. Раннер использует тот же `AGENTS.md`, `docs/agents/`, `REVIEW.md` и скиллы из `.opencode/skills/`, что и локальный агент.
 
 ### Интерактивный агент
 
@@ -143,16 +143,16 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 
 Права и ограничения:
 
-| Настройка                                                         | Значение                        | Зачем                                       |
-| :---------------------------------------------------------------- | :------------------------------ | :------------------------------------------ |
-| `contents: read`                                                  | чтение репозитория              | checkout и `REVIEW.md`                      |
-| `id-token: write`                                                 | только `opencode.yml`           | OIDC-обмен на токен OpenCode App            |
-| `issues: write`                                                   | интерактивный агент             | скиллы публикуют issue и комментарии        |
-| `pull-requests: write`                                            | оба воркфлоу                    | драфт-PR и комментарий ревью                |
-| `issues: read`, `actions: read`, `checks: read`, `statuses: read` | только `pr-review.yml`          | спецификация, прогоны и статусы CI          |
-| `persist-credentials: false`                                      | checkout без credentials        | push только токеном приложения              |
-| `timeout-minutes: 45` / `15`                                      | интерактивный агент / автотриаж | зависший прогон не тратит токены бесконечно |
-| `concurrency: opencode-<номер>`                                   | без отмены                      | команды и автотриаж ждут друг друга         |
+| Настройка                                                         | Значение                        | Зачем                                        |
+| :---------------------------------------------------------------- | :------------------------------ | :------------------------------------------- |
+| `contents: read`                                                  | чтение репозитория              | checkout и `REVIEW.md`                       |
+| `id-token: write`                                                 | интерактивный агент и аудит     | OIDC-обмен на токен OpenCode App             |
+| `issues: write`                                                   | интерактивный агент и аудит     | скиллы и аудит публикуют issue и комментарии |
+| `pull-requests: write`                                            | оба воркфлоу                    | драфт-PR и комментарий ревью                 |
+| `issues: read`, `actions: read`, `checks: read`, `statuses: read` | только `pr-review.yml`          | спецификация, прогоны и статусы CI           |
+| `persist-credentials: false`                                      | checkout без credentials        | push только токеном приложения               |
+| `timeout-minutes: 45` / `15`                                      | интерактивный агент / автотриаж | зависший прогон не тратит токены бесконечно  |
+| `concurrency: opencode-<номер>`                                   | без отмены                      | команды и автотриаж ждут друг друга          |
 
 ### Бюджет запусков на PR
 
@@ -161,6 +161,20 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 - Отмена, тайм-аут и повторный **Re-run** расходуют попытку.
 - При исчерпании публикуется `limit_exhausted`, последний SHA, ссылка на логи и статус «нужен человек»; job с моделью пропускается. `budget` публикует `limit_exhausted` и `infra`; отдельный job `report` без модели публикует `timeout` и `agent_failed`.
 - Комментарий PR — только отчёт; его текст бюджет не меняет. Ограничение действует при сохранённой истории и неизменённой конфигурации; администратор репозитория может изменить условия. Новый PR получает новый бюджет.
+
+### Регулярный аудит Lighthouse
+
+- **Воркфлоу:** `.github/workflows/scheduled-audit.yml` — `schedule` и `workflow_dispatch` в одном файле. GitHub запускает `schedule` только из основной ветки, поэтому файл должен быть в `main`.
+- **Расписание:** `17 3 * * *` с `timezone: Europe/Moscow` — ежедневно в 03:17 МСК. Без `timezone` GitHub считал бы cron в UTC, и запуск был бы в 06:17 МСК. GitHub может задержать или пропустить запуск; в публичном репозитории расписание отключается после 60 дней без активности.
+- **Ручной запуск:** Actions → **scheduled-audit** → **Run workflow** из `main`, либо `gh workflow run scheduled-audit.yml --ref main -f source=lighthouse`. Параметр `source=lesson` подставляет учебный отчёт.
+- **Данные:** переменная репозитория `APP_URL` (Settings → Secrets and variables → Actions → Variables). Сейчас — публичный стенд Railway. Пустая переменная останавливает job до вызова модели.
+- **Сбор:** Lighthouse CLI (`lighthouse@13.6.0`), одна страница, категории performance/accessibility/best-practices/seo. Локально: `APP_URL=... mise run audit` (нужен Chrome).
+- **Отчёт:** артефакт `lighthouse-audit-<run_id>-<source>`, 30 дней. Внутри — `lighthouse.report.json`, `lighthouse.report.html`, `report.md` (сводка с `Audit key`) и `findings.json`. В CI отчёт пишется в `$RUNNER_TEMP/audit` вне рабочего дерева, локально — в игнорируемый `audit/`; workflow отдельно проверяет `git status --porcelain`.
+- **Агент:** `.opencode/agents/lighthouse-auditor.md` в формате OpenCode V1: action запускает `opencode github run` версии V1.19.6. Модель `opencode/deepseek-v4.1-flash`, инструкция — в `prompt` шага. Права job: `contents: read`, `id-token: write`, `issues: write`; прав на изменение кода и PR нет.
+- **Выбор агента:** action V1.19.6 игнорирует input `agent`, поэтому сессия берёт `default_agent` из `.opencode/audit.json`, подключённого через `OPENCODE_CONFIG`. Остальная конфигурация (`opencode.json`, MCP, `external_directory`) объединяется как обычно.
+- **Публикация:** журнал `Lighthouse-аудит: журнал прогонов` (метка `lighthouse-audit`) — один комментарий на прогон. Новая находка — отдельный issue `[lighthouse] …` с метками `lighthouse-finding` и `needs-triage`: проблема, предлагаемое действие, `APP_URL`, ссылка на прогон, артефакт и `Audit key`.
+- **Дедупликация:** ключ — `lighthouse:<audit id>`. Если задача с ключом уже есть, новая не создаётся; если хеш отчёта уже есть в комментариях журнала, агент не публикует и комментарий. Учебный отчёт (`source=lesson`) помечается `training-audit` и не считается подтверждённым дефектом.
+- **Ограничения:** артефакт временный, поэтому находка и ссылка на прогон дублируются в issue; оценки Lighthouse колеблются между прогонами, поэтому дедупликация идёт по `audit id`, а не по числу.
 
 ### CI и браузерный артефакт
 
