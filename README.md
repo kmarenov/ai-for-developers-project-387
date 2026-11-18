@@ -137,7 +137,7 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 - **Ограничения ревьюера:** `.opencode/agents/pr-reviewer.md` запрещает edit, subagent, skill и изменяющие shell-команды; разрешены только чтение и `gh pr view/diff/checks`, `gh issue view`, `gh run view`, `git diff/show/log`.
 - **Публикация:** отдельным шагом `gh pr comment`; ревьюер не меняет код и не продолжает сессию реализации. Форматирование не комментируется — его проверяет линтер.
 - **Тайм-аут и параллельность:** `timeout-minutes: 15`, `concurrency` на номер PR с `cancel-in-progress: true`: устаревшее ревью отменяется.
-- **Доверенная конфигурация:** `REVIEW.md`, `AGENTS.md`, `CODING_STANDARDS.md` и `.opencode/agents/pr-reviewer.md` перезаписываются версией из base перед запуском, чтобы PR не мог ослабить собственную проверку. PR, который вводит эти файлы впервые, использует head — это единственный bootstrap-случай.
+- **Доверенная конфигурация:** `REVIEW.md`, `AGENTS.md`, `CODING_STANDARDS.md`, `opencode.json` и `.opencode/agents/pr-reviewer.md` перезаписываются версией из base перед запуском, чтобы PR не мог ослабить собственную проверку. PR, который вводит эти файлы впервые, использует head — это единственный bootstrap-случай.
 - **Ограничение:** для события `pull_request` GitHub берёт сам `pr-review.yml` из версии PR. PR, который меняет воркфлоу авторевью, требует отдельного человеческого ревью изменений прав и шагов; пиннинг файлов это не закрывает.
 
 Права и ограничения:
