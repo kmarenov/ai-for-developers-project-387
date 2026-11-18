@@ -175,6 +175,10 @@ function BookingRow({ booking, meetingType, timezone, now }: BookingRowProps) {
               <span>{booking.guest_email}</span>
             )}
           </p>
+
+          {booking.topic.trim() !== "" ? (
+            <p className="text-sm whitespace-pre-wrap break-words">{booking.topic.trim()}</p>
+          ) : null}
         </CardContent>
       </Card>
     </article>
