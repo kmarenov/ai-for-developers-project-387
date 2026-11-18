@@ -21,6 +21,7 @@ type Booking = {
   end_time: string;
   guest_name: string;
   guest_email: string;
+  topic: string;
 };
 
 /** Formats an instant for the assertions; independent of the app's date-fns helpers. */
@@ -53,6 +54,7 @@ test("гость записывается на слот, а владелец в�
   const durationMinutes = 30;
   const guestName = `Гость ${testInfo.testId}`;
   const guestEmail = `guest-${testInfo.testId}@example.com`;
+  const topic = `Тема разговора ${testInfo.testId}`;
 
   const meetingTypeResponse = await api.post("/meeting-types", {
     data: { title, description, duration_minutes: durationMinutes },
@@ -93,6 +95,7 @@ test("гость записывается на слот, а владелец в�
 
   await page.getByLabel("Имя", { exact: true }).fill(guestName);
   await page.getByLabel("Email", { exact: true }).fill(guestEmail);
+  await page.getByLabel("Тема разговора (необязательно)", { exact: true }).fill(topic);
   await page.getByRole("button", { name: "Записаться", exact: true }).click();
 
   const success = page.getByRole("status");
@@ -115,6 +118,7 @@ test("гость записывается на слот, а владелец в�
     end_time: slot.end_time,
     guest_name: guestName,
     guest_email: guestEmail,
+    topic,
   });
 
   // The owner sees the same booking in the upcoming-meetings list.
@@ -126,6 +130,7 @@ test("гость записывается на слот, а владелец в�
   await expect(row).toContainText(title);
   await expect(row).toContainText(`${clock(slot.start_time)}–${clock(slot.end_time)}`);
   await expect(row).toContainText(guestName);
+  await expect(row).toContainText(topic);
   await expect(row.getByRole("link", { name: guestEmail })).toHaveAttribute(
     "href",
     `mailto:${guestEmail}`,
