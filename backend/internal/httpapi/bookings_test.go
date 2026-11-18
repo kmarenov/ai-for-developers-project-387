@@ -30,6 +30,21 @@ func bookingRequestBody(meetingTypeID string, start time.Time, name, email strin
 	return string(payload)
 }
 
+func bookingRequestBodyWithTopic(meetingTypeID string, start time.Time, name, email, topic string) string {
+	payload, err := json.Marshal(map[string]string{
+		"meeting_type_id": meetingTypeID,
+		"start_time":      start.Format(time.RFC3339),
+		"guest_name":      name,
+		"guest_email":     email,
+		"topic":           topic,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return string(payload)
+}
+
 func decodeBooking(t *testing.T, payload []byte) booking.Booking {
 	t.Helper()
 
@@ -84,6 +99,112 @@ func TestCreateBookingReturnsCreatedBookingWithServerComputedEndTime(t *testing.
 	}
 	if created.GuestEmail != "guest@example.com" {
 		t.Fatalf("guest_email = %q, want trimmed lowercase email", created.GuestEmail)
+	}
+}
+
+func TestCreateBookingNormalizesTopic(t *testing.T) {
+	tests := []struct {
+		name  string
+		body  func(meetingTypeID string, start time.Time) string
+		topic string
+	}{
+		{
+			name: "missing topic becomes an empty string",
+			body: func(meetingTypeID string, start time.Time) string {
+				return bookingRequestBody(meetingTypeID, start, "Иван", "guest@example.com")
+			},
+			topic: "",
+		},
+		{
+			name: "empty topic becomes an empty string",
+			body: func(meetingTypeID string, start time.Time) string {
+				return bookingRequestBodyWithTopic(meetingTypeID, start, "Иван", "guest@example.com", "")
+			},
+			topic: "",
+		},
+		{
+			name: "whitespace-only topic becomes an empty string",
+			body: func(meetingTypeID string, start time.Time) string {
+				return bookingRequestBodyWithTopic(meetingTypeID, start, "Иван", "guest@example.com", "   \n\t ")
+			},
+			topic: "",
+		},
+		{
+			name: "topic is trimmed while inner whitespace is kept",
+			body: func(meetingTypeID string, start time.Time) string {
+				return bookingRequestBodyWithTopic(meetingTypeID, start, "Иван", "guest@example.com", "  Обсудить\nпроект  ")
+			},
+			topic: "Обсудить\nпроект",
+		},
+		{
+			name: "200 unicode characters are accepted",
+			body: func(meetingTypeID string, start time.Time) string {
+				return bookingRequestBodyWithTopic(meetingTypeID, start, "Иван", "guest@example.com", strings.Repeat("я", 200))
+			},
+			topic: strings.Repeat("я", 200),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := meetingtype.NewStore()
+			meetingType := createMeetingTypeInStore(t, store, 30)
+			server := newTestServer(t, store)
+			start := moscowTime(t, time.November, 16, 9, 0)
+
+			response, payload := doRequest(t, server, http.MethodPost, "/bookings", test.body(meetingType.ID, start))
+			if response.StatusCode != http.StatusCreated {
+				t.Fatalf("status = %d, want %d; body = %s", response.StatusCode, http.StatusCreated, payload)
+			}
+
+			created := decodeBooking(t, payload)
+			if created.Topic != test.topic {
+				t.Fatalf("topic = %q, want %q", created.Topic, test.topic)
+			}
+		})
+	}
+}
+
+func TestCreateBookingRejectsTopicLongerThan200Characters(t *testing.T) {
+	store := meetingtype.NewStore()
+	meetingType := createMeetingTypeInStore(t, store, 30)
+	server := newTestServer(t, store)
+	start := moscowTime(t, time.November, 16, 9, 0)
+
+	response, payload := doRequest(t, server, http.MethodPost, "/bookings",
+		bookingRequestBodyWithTopic(meetingType.ID, start, "Иван", "guest@example.com", strings.Repeat("я", 201)),
+	)
+
+	assertErrorEnvelope(t, response, payload, http.StatusBadRequest, httpapi.CodeInvalidRequest)
+}
+
+func TestListBookingsReturnsTopic(t *testing.T) {
+	store := meetingtype.NewStore()
+	meetingType := createMeetingTypeInStore(t, store, 30)
+	server := newTestServer(t, store)
+	start := moscowTime(t, time.November, 16, 9, 0)
+
+	response, payload := doRequest(t, server, http.MethodPost, "/bookings",
+		bookingRequestBodyWithTopic(meetingType.ID, start, "Иван", "guest@example.com", "  Обсудить проект  "),
+	)
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body = %s", response.StatusCode, http.StatusCreated, payload)
+	}
+
+	response, payload = doRequest(t, server, http.MethodGet, "/bookings", "")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body = %s", response.StatusCode, http.StatusOK, payload)
+	}
+
+	var listed []booking.Booking
+	if err := json.Unmarshal(payload, &listed); err != nil {
+		t.Fatalf("decode bookings %q: %v", payload, err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("listed %d bookings, want 1", len(listed))
+	}
+	if listed[0].Topic != "Обсудить проект" {
+		t.Fatalf("listed topic = %q, want %q", listed[0].Topic, "Обсудить проект")
 	}
 }
 

@@ -28,6 +28,7 @@ type Booking struct {
 	EndTime       time.Time `json:"end_time"`
 	GuestName     string    `json:"guest_name"`
 	GuestEmail    string    `json:"guest_email"`
+	Topic         string    `json:"topic"`
 }
 
 // CreateInput carries request fields validated by the HTTP layer. The end time
@@ -38,6 +39,7 @@ type CreateInput struct {
 	DurationMinutes int
 	GuestName       string
 	GuestEmail      string
+	Topic           string
 }
 
 // ValidateSlot checks a candidate interval against the calendar rules and the
@@ -72,6 +74,7 @@ func (s *Store) Create(input CreateInput, validate ValidateSlot) (Booking, error
 		EndTime:       endTime.UTC(),
 		GuestName:     input.GuestName,
 		GuestEmail:    input.GuestEmail,
+		Topic:         input.Topic,
 	}
 
 	s.mu.Lock()

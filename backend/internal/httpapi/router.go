@@ -266,6 +266,7 @@ type createBookingRequest struct {
 	StartTime     *string `json:"start_time"`
 	GuestName     *string `json:"guest_name"`
 	GuestEmail    *string `json:"guest_email"`
+	Topic         *string `json:"topic"`
 }
 
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -402,11 +403,20 @@ func validateCreateBookingRequest(request createBookingRequest) (createBookingIn
 		return createBookingInput{}, false
 	}
 
+	topic := ""
+	if request.Topic != nil {
+		topic = strings.TrimSpace(*request.Topic)
+	}
+	if utf8.RuneCountInString(topic) > 200 {
+		return createBookingInput{}, false
+	}
+
 	return createBookingInput{
 		MeetingTypeID: meetingTypeID,
 		StartTime:     startTime.UTC(),
 		GuestName:     guestName,
 		GuestEmail:    guestEmail,
+		Topic:         topic,
 	}, true
 }
 

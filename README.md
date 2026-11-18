@@ -304,7 +304,7 @@ PR, который не трогает workflow-файлы, агент созд�
     - Гость выбирает день.
     - Система запрашивает свободные слоты у бэкенда и отображает их (с учетом занятости и рабочих часов).
     - Гость выбирает свободное время (например, 09:45 – 10:00).
-4.  **Оформление записи:** Гость вводит свои данные (Имя, Email) и нажимает «Записаться».
+4.  **Оформление записи:** Гость вводит свои данные (Имя, Email), при желании — необязательную тему разговора до 200 символов и нажимает «Записаться».
 5.  **Успех:** Гость видит экран успешной записи. Созданная бронь немедленно появляется в списке предстоящих встреч у Владельца.
 
 ---
@@ -320,8 +320,8 @@ PR, который не трогает workflow-файлы, агент созд�
 - `MeetingType`: `id`, `title`, `description`, `duration_minutes`.
 - `CreateMeetingTypeRequest`: `title`, `description`, `duration_minutes` (без `id`).
 - `TimeSlot`: `start_time`, `end_time` — только свободные слоты, без `is_available`.
-- `Booking`: `id`, `meeting_type_id`, `start_time`, `end_time`, `guest_name`, `guest_email`.
-- `CreateBookingRequest`: `meeting_type_id`, `start_time`, `guest_name`, `guest_email` (без `end_time`).
+- `Booking`: `id`, `meeting_type_id`, `start_time`, `end_time`, `guest_name`, `guest_email`, `topic` (всегда строка; пустая, если гость не указал тему).
+- `CreateBookingRequest`: `meeting_type_id`, `start_time`, `guest_name`, `guest_email`, необязательный `topic` до 200 Unicode-символов после trim (без `end_time`).
 - `ErrorResponse`: `{code, message}`; `code` — закрытый union: `invalid_request`, `invalid_slot`, `meeting_type_not_found`, `slot_taken`, `not_found`, `method_not_allowed`, `internal_error`.
 
 **Основные эндпоинты:**
