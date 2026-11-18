@@ -30,6 +30,19 @@ steps {
     glob = List("opencode.json", "railway.json")
     check = "node scripts/check-deploy-config.mjs"
   }
+  ["audit-config"] {
+    glob = List(
+      ".github/workflows/scheduled-audit.yml",
+      ".opencode/audit.json",
+      ".opencode/agents/lighthouse-auditor.md",
+      "scripts/check-audit-config.mjs",
+    )
+    check = "node scripts/check-audit-config.mjs"
+  }
+  ["audit-summarizer"] {
+    glob = List("scripts/audit/summarize.mjs", "scripts/audit/summarize.test.mjs")
+    check = "node --test scripts/audit/summarize.test.mjs"
+  }
   ["typecheck"] {
     glob = List("frontend/**/*.ts", "frontend/**/*.tsx")
     check = "pnpm --dir frontend typecheck"
