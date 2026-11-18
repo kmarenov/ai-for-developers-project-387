@@ -17,7 +17,10 @@ import (
 	"github.com/kmarenov/ai-for-developers-project-386/backend/internal/timerules"
 )
 
-const maxRequestBodyBytes = 1 << 20
+const (
+	maxRequestBodyBytes = 1 << 20
+	maxTopicRunes       = 200
+)
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
@@ -407,7 +410,7 @@ func validateCreateBookingRequest(request createBookingRequest) (createBookingIn
 	if request.Topic != nil {
 		topic = strings.TrimSpace(*request.Topic)
 	}
-	if utf8.RuneCountInString(topic) > 200 {
+	if utf8.RuneCountInString(topic) > maxTopicRunes {
 		return createBookingInput{}, false
 	}
 

@@ -116,6 +116,17 @@ func TestCreateBookingNormalizesTopic(t *testing.T) {
 			topic: "",
 		},
 		{
+			name: "null topic becomes an empty string",
+			body: func(meetingTypeID string, start time.Time) string {
+				return fmt.Sprintf(
+					`{"meeting_type_id":"%s","start_time":"%s","guest_name":"Иван","guest_email":"guest@example.com","topic":null}`,
+					meetingTypeID,
+					start.Format(time.RFC3339),
+				)
+			},
+			topic: "",
+		},
+		{
 			name: "empty topic becomes an empty string",
 			body: func(meetingTypeID string, start time.Time) string {
 				return bookingRequestBodyWithTopic(meetingTypeID, start, "Иван", "guest@example.com", "")
