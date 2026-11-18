@@ -202,6 +202,9 @@ gh run list --workflow pr-review.yml --limit 5
 # Бюджет: четыре команды /oc в одном PR; четвёртая должна завершиться
 # комментарием limit_exhausted без job opencode
 gh pr comment <номер> --body "/oc ответь одним словом, код не меняй"
+
+# Проверить, что бюджет считает запуски по заголовку opencode #<номер>
+gh run list --workflow opencode.yml --limit 10
 ```
 
 ### Ограничение авторизации
