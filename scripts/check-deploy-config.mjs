@@ -32,6 +32,10 @@ check(
   opencode?.mcp?.railway === undefined,
   "opencode.json: V1 shape mcp.railway is not supported; use mcp.servers.railway",
 );
+check(
+  opencode?.permission?.external_directory === "allow",
+  'opencode.json: expected permission.external_directory to be "allow" for headless CI',
+);
 
 check(
   railway?.build?.builder === "DOCKERFILE",

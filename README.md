@@ -121,6 +121,7 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 - **Автотриаж:** job `triage` разбирает новое issue, не меняя код и не создавая спеку и тикеты. Метки — по `docs/agents/triage-labels.md`. Issue с `ready-for-agent` пропускается.
 - **Модель:** `opencode/deepseek-v4.1-flash`; ключ только в секрете `OPENCODE_API_KEY`.
 - **Публикация сессий:** `share: false`.
+- **Headless-разрешения:** `opencode.json` разрешает `external_directory`, иначе агент в CI ждёт подтверждения на `/tmp`/`/tmp/pnpm-shim` и падает по таймауту. Job `report` задаёт `GH_REPO`, чтобы опубликовать причину сбоя без checkout.
 
 Кого слушает интерактивный агент:
 
@@ -150,7 +151,7 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 | `pull-requests: write`                                            | оба воркфлоу                    | драфт-PR и комментарий ревью                |
 | `issues: read`, `actions: read`, `checks: read`, `statuses: read` | только `pr-review.yml`          | спецификация, прогоны и статусы CI          |
 | `persist-credentials: false`                                      | checkout без credentials        | push только токеном приложения              |
-| `timeout-minutes: 30` / `15`                                      | интерактивный агент / автотриаж | зависший прогон не тратит токены бесконечно |
+| `timeout-minutes: 45` / `15`                                      | интерактивный агент / автотриаж | зависший прогон не тратит токены бесконечно |
 | `concurrency: opencode-<номер>`                                   | без отмены                      | команды и автотриаж ждут друг друга         |
 
 ### Бюджет запусков на PR

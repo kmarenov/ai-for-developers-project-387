@@ -135,7 +135,7 @@ jobs:
     needs: budget
     if: needs.budget.outputs.allowed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read # checkout читает репозиторий; push и комментарии идут токеном приложения
       id-token: write # OIDC-обмен на токен GitHub App OpenCode
@@ -177,6 +177,7 @@ jobs:
       - name: Report agent failure
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RESULT: ${{ needs.opencode.result }}
           PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
           IS_PR: ${{ needs.budget.outputs.is_pr }}
