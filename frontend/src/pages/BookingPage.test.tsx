@@ -376,6 +376,28 @@ describe("BookingPage", () => {
     });
   });
 
+  it("accepts 200 unicode characters even when they need surrogate pairs", async () => {
+    const user = userEvent.setup();
+    const { mutateAsync } = mockCreateBooking();
+    const topic = "😀".repeat(200);
+    renderPage();
+    await selectSlot(user);
+    await fillForm(user, { topic });
+
+    await user.click(screen.getByRole("button", { name: "Записаться" }));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync).toHaveBeenCalledWith({
+      data: {
+        meeting_type_id: meetingTypeId,
+        start_time: "2026-11-16T06:00:00Z",
+        guest_name: "Иван Петров",
+        guest_email: "Guest@Example.com",
+        topic,
+      },
+    });
+  });
+
   it("omits an empty topic from the request", async () => {
     const user = userEvent.setup();
     const { mutateAsync } = mockCreateBooking();

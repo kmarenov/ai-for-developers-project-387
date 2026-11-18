@@ -36,6 +36,8 @@ const mutationOptions = { mutation: { retry: 0 } };
 
 const contractEmailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+const maxTopicLength = 200;
+
 const bookingFormSchema = z.object({
   guest_name: z.string().trim().min(1, "Укажите имя").max(100, "Не больше 100 символов"),
   guest_email: z
@@ -44,7 +46,10 @@ const bookingFormSchema = z.object({
     .min(1, "Укажите email")
     .max(254, "Не больше 254 символов")
     .regex(contractEmailPattern, "Введите корректный email"),
-  topic: z.string().trim().max(200, "Не больше 200 символов"),
+  topic: z
+    .string()
+    .trim()
+    .refine((value) => [...value].length <= maxTopicLength, "Не больше 200 символов"),
 });
 
 type BookingFormValues = z.infer<typeof bookingFormSchema>;
