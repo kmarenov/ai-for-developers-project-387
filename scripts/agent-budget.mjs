@@ -75,6 +75,7 @@ function ghJson(args) {
   const output = execFileSync("gh", args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 10 * 1024 * 1024,
   });
 
   return JSON.parse(output);
