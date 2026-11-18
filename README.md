@@ -162,7 +162,7 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 ### CI и браузерный артефакт
 
 - `ci.yml` запускается на `pull_request` и на `push` в `main`. На PR checkout идёт на `github.event.pull_request.head.sha`, а не на временный merge-коммит.
-- `git rev-parse HEAD` пишется в `artifacts/head-sha.txt` и step summary.
+- `git rev-parse HEAD` пишется в `test-results/head-sha.txt` и step summary.
 - Playwright trace включается на CI даже для успешного прогона. Артефакт `e2e-<sha>` содержит `playwright-report/`, `test-results/` и `head-sha.txt`. После нового push артефакт прежней версии не считается доказательством: проверку повторяют и сверяют SHA с текущим head PR.
 - Авторевью может запуститься параллельно с CI и ещё не видеть артефакт; его сверяет человек перед мержем.
 

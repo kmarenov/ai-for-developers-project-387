@@ -114,7 +114,16 @@ test("the current run does not count itself", () => {
   assert.equal(evaluate(runs, { [CURRENT_RUN]: jobs() }).count, 0);
 });
 
-test("collectBudget fetches jobs only for matching runs", () => {
+test("collectBudget reads the snake_case Actions API shape", () => {
+  const rawRun = (id, overrides = {}) => ({
+    id,
+    display_title: `opencode #${PR}`,
+    event: "issue_comment",
+    run_attempt: 1,
+    conclusion: "success",
+    ...overrides,
+  });
+
   const calls = [];
   const exec = (args) => {
     calls.push(args);
@@ -122,7 +131,11 @@ test("collectBudget fetches jobs only for matching runs", () => {
     if (args.includes("--slurp")) {
       return [
         {
-          workflow_runs: [run(1), run(2, { displayTitle: "opencode #16" }), run(CURRENT_RUN)],
+          workflow_runs: [
+            rawRun(1, { run_attempt: 2 }),
+            rawRun(2, { display_title: "opencode #16" }),
+            rawRun(CURRENT_RUN),
+          ],
         },
       ];
     }
@@ -142,7 +155,7 @@ test("collectBudget fetches jobs only for matching runs", () => {
     exec,
   });
 
-  assert.deepEqual(result, { count: 1, allowed: true, reason: "" });
+  assert.deepEqual(result, { count: 2, allowed: true, reason: "" });
   assert.equal(calls.length, 2);
   assert.ok(calls[1].some((arg) => arg.includes("/runs/1/jobs")));
 });

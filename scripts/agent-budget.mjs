@@ -43,6 +43,20 @@ export function evaluateBudget({ runs, jobsByRunId, prNumber, currentRunId, maxR
   };
 }
 
+/**
+ * The Actions REST API returns snake_case, while evaluateBudget uses a small
+ * camelCase shape. Normalise once so the tests can exercise both.
+ */
+export function normalizeRun(run) {
+  return {
+    id: run.id,
+    displayTitle: run.display_title ?? run.displayTitle ?? "",
+    event: run.event,
+    runAttempt: run.run_attempt ?? run.runAttempt ?? 1,
+    conclusion: run.conclusion,
+  };
+}
+
 function ghJson(args) {
   const output = execFileSync("gh", args, {
     encoding: "utf8",
@@ -61,7 +75,7 @@ export function collectBudget({ repo, prNumber, currentRunId, maxRuns, exec = gh
     `repos/${repo}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=100`,
   ]);
 
-  const runs = pages.flatMap((page) => page.workflow_runs ?? []);
+  const runs = pages.flatMap((page) => page.workflow_runs ?? []).map(normalizeRun);
   const expectedTitle = `opencode #${prNumber}`;
   const candidates = runs.filter(
     (run) =>

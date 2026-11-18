@@ -36,8 +36,24 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Pin trusted review config from base
+        # Критерии и конфиг ревьюера берём из base, чтобы PR не мог ослабить
+        # собственную проверку. PR, который вводит эти файлы впервые, использует
+        # head: это единственный bootstrap-случай.
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          mkdir -p .opencode/agents
+          for file in REVIEW.md AGENTS.md CODING_STANDARDS.md .opencode/agents/pr-reviewer.md; do
+            if git cat-file -e "${base}:${file}" 2>/dev/null; then
+              git show "${base}:${file}" > "$file"
+              printf 'Pinned %s from %s\n' "$file" "$base"
+            else
+              printf 'Base %s has no %s; using PR head (bootstrap)\n' "$base" "$file"
+            fi
+          done
 
       - name: Install OpenCode CLI
         run: |
