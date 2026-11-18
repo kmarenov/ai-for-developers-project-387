@@ -44,6 +44,7 @@ const bookingFormSchema = z.object({
     .min(1, "Укажите email")
     .max(254, "Не больше 254 символов")
     .regex(contractEmailPattern, "Введите корректный email"),
+  topic: z.string().trim().max(200, "Не больше 200 символов"),
 });
 
 type BookingFormValues = z.infer<typeof bookingFormSchema>;
@@ -138,7 +139,7 @@ export function BookingPage() {
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
-    defaultValues: { guest_name: "", guest_email: "" },
+    defaultValues: { guest_name: "", guest_email: "", topic: "" },
     mode: "onTouched",
   });
 
@@ -235,6 +236,10 @@ export function BookingPage() {
     }
     if (errors.guest_email !== undefined) {
       form.setFocus("guest_email");
+      return;
+    }
+    if (errors.topic !== undefined) {
+      form.setFocus("topic");
     }
   };
 
@@ -252,10 +257,11 @@ export function BookingPage() {
           start_time: selectedSlot.start_time,
           guest_name: values.guest_name,
           guest_email: values.guest_email,
+          ...(values.topic !== "" ? { topic: values.topic } : {}),
         },
       });
 
-      form.reset({ guest_name: "", guest_email: "" });
+      form.reset({ guest_name: "", guest_email: "", topic: "" });
       setSelectedSlot(undefined);
       setCreatedBooking(response.data);
     } catch (error) {
@@ -400,6 +406,28 @@ export function BookingPage() {
             {form.formState.errors.guest_email?.message !== undefined ? (
               <p id="guest-email-error" className="text-sm text-destructive">
                 {form.formState.errors.guest_email.message}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="guest-topic" className="block text-sm font-medium">
+              Тема разговора (необязательно)
+            </label>
+            <textarea
+              id="guest-topic"
+              rows={3}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive"
+              aria-invalid={form.formState.errors.topic !== undefined}
+              aria-describedby={
+                form.formState.errors.topic !== undefined ? "guest-topic-error" : undefined
+              }
+              disabled={isSubmitting}
+              {...form.register("topic")}
+            />
+            {form.formState.errors.topic?.message !== undefined ? (
+              <p id="guest-topic-error" className="text-sm text-destructive">
+                {form.formState.errors.topic.message}
               </p>
             ) : null}
           </div>
