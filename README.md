@@ -61,7 +61,7 @@ docker run --rm -p 8080:8080 -e PORT=8080 calendar-slot-code:local
 - **Сборка:** корневой `Dockerfile`; Railway не использует собственный билдер.
 - **Порт:** платформа передаёт `PORT`, приложение слушает его. Локально значение по умолчанию — `8080`.
 - **Healthcheck:** `GET /health`.
-- **Конфигурация:** `railway.json` (Dockerfile, healthcheck, рестарты, без засыпания) и `opencode.json` (MCP).
+- **Конфигурация:** `railway.json` (Dockerfile, healthcheck, рестарты, без засыпания) и `opencode.json` (MCP и разрешение `external_directory` для headless-агента).
 
 Проверить стенд:
 
@@ -72,7 +72,7 @@ curl -fsS https://web-main-production-bb7a7b4d.up.railway.app/config
 
 ### 🔌 MCP для деплоя
 
-В репозитории лежит проектная конфигурация OpenCode — `opencode.json` с remote MCP Railway. Секретов в ней нет, только URL.
+В репозитории лежит проектная конфигурация OpenCode — `opencode.json` с remote MCP Railway и `permission.external_directory: allow` для headless-агента. Секретов в ней нет. Разрешение нужно, чтобы агент в GitHub Actions не ждал подтверждения на `/tmp` и `/tmp/pnpm-shim`; для локальной работы оно расширяет доступ агента за пределы репозитория.
 
 Порядок подключения:
 
