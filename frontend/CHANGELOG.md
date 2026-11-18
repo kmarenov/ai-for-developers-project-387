@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0](https://github.com/kmarenov/ai-for-developers-project-387/compare/frontend-v1.0.0...frontend-v1.1.0) (2026-11-18)
+
+
+### Features
+
+* добавить тему разговора в контракт и API брони ([#7](https://github.com/kmarenov/ai-for-developers-project-387/issues/7)) ([b7a4d9b](https://github.com/kmarenov/ai-for-developers-project-387/commit/b7a4d9b2c5dfee0354822c5bd1f5d5c72533d8f4))
+* добавить тему разговора в форму записи ([#8](https://github.com/kmarenov/ai-for-developers-project-387/issues/8)) ([0a21c38](https://github.com/kmarenov/ai-for-developers-project-387/commit/0a21c38c5ea3c8876908cda37fffa944f99467d5))
+* показать тему разговора в карточке встречи ([#9](https://github.com/kmarenov/ai-for-developers-project-387/issues/9)) ([f9f0935](https://github.com/kmarenov/ai-for-developers-project-387/commit/f9f0935e26f1203c3e5211791acc85d7fb6f9dc1))
+* тема разговора в записи ([#6](https://github.com/kmarenov/ai-for-developers-project-387/issues/6)) ([80a0cee](https://github.com/kmarenov/ai-for-developers-project-387/commit/80a0cee1187c1be847640f07919a8591de368d24))
+
+
+### Bug Fixes
+
+* не падать на отсутствующей теме в админке ([#9](https://github.com/kmarenov/ai-for-developers-project-387/issues/9)) ([83a8721](https://github.com/kmarenov/ai-for-developers-project-387/commit/83a8721211250d11b59d5e471183302f7bcaf644))
+* проверять лимит темы в Unicode-символах ([#8](https://github.com/kmarenov/ai-for-developers-project-387/issues/8)) ([3f08567](https://github.com/kmarenov/ai-for-developers-project-387/commit/3f08567ef240d0e954b9b929e28c0fff50742599))
+
 ## 1.0.0 (2026-11-14)
 
 
