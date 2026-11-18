@@ -57,6 +57,7 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
           IS_PR: ${{ github.event_name == 'pull_request_review_comment' || github.event.issue.pull_request != null }}
           CURRENT_RUN: ${{ github.run_id }}
+          CURRENT_ATTEMPT: ${{ github.run_attempt }}
           MAX_RUNS: "3"
         run: |
           if [ -z "$OPENCODE_API_KEY" ]; then
@@ -84,6 +85,7 @@ jobs:
               --repo "$REPO" \
               --pr "$PR_NUMBER" \
               --current-run "$CURRENT_RUN" \
+              --current-attempt "$CURRENT_ATTEMPT" \
               --max "$MAX_RUNS"
             echo "is_pr=true"
           } >> "$GITHUB_OUTPUT"

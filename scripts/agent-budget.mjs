@@ -13,14 +13,28 @@ const COMMENT_EVENTS = new Set(["issue_comment", "pull_request_review_comment"])
  * model job started also consumes an attempt. Runs skipped by the trusted
  * author/command filter and runs blocked by the limit do not.
  */
-export function evaluateBudget({ runs, jobsByRunId, prNumber, currentRunId, maxRuns }) {
+export function evaluateBudget({
+  runs,
+  jobsByRunId,
+  prNumber,
+  currentRunId,
+  currentRunAttempt = 1,
+  maxRuns,
+}) {
   const expectedTitle = `opencode #${prNumber}`;
   let count = 0;
 
   for (const run of runs) {
-    if (String(run.id) === String(currentRunId)) continue;
     if (run.displayTitle !== expectedTitle) continue;
     if (!COMMENT_EVENTS.has(run.event)) continue;
+
+    if (String(run.id) === String(currentRunId)) {
+      // The current attempt is being admitted now. Its earlier attempts are
+      // already spent, so a Re-run adds run_attempt - 1 to the budget.
+      const attempt = Number(run.runAttempt ?? currentRunAttempt) || 1;
+      count += Math.max(0, attempt - 1);
+      continue;
+    }
 
     const jobs = jobsByRunId[run.id] ?? [];
     const modelStarted = jobs.some(
@@ -67,7 +81,14 @@ function ghJson(args) {
 }
 
 /** Fetches the workflow history and the jobs of each candidate run. */
-export function collectBudget({ repo, prNumber, currentRunId, maxRuns, exec = ghJson }) {
+export function collectBudget({
+  repo,
+  prNumber,
+  currentRunId,
+  currentRunAttempt = 1,
+  maxRuns,
+  exec = ghJson,
+}) {
   const pages = exec([
     "api",
     "--paginate",
@@ -78,14 +99,13 @@ export function collectBudget({ repo, prNumber, currentRunId, maxRuns, exec = gh
   const runs = pages.flatMap((page) => page.workflow_runs ?? []).map(normalizeRun);
   const expectedTitle = `opencode #${prNumber}`;
   const candidates = runs.filter(
-    (run) =>
-      String(run.id) !== String(currentRunId) &&
-      run.displayTitle === expectedTitle &&
-      COMMENT_EVENTS.has(run.event),
+    (run) => run.displayTitle === expectedTitle && COMMENT_EVENTS.has(run.event),
   );
 
   const jobsByRunId = {};
   for (const run of candidates) {
+    if (String(run.id) === String(currentRunId)) continue;
+
     const payload = exec(["api", `repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`]);
     jobsByRunId[run.id] = payload.jobs ?? [];
   }
@@ -95,6 +115,7 @@ export function collectBudget({ repo, prNumber, currentRunId, maxRuns, exec = gh
     jobsByRunId,
     prNumber,
     currentRunId,
+    currentRunAttempt,
     maxRuns,
   });
 }
@@ -124,15 +145,22 @@ function main() {
   const repo = args.repo;
   const prNumber = args.pr;
   const currentRunId = args["current-run"];
+  const currentRunAttempt = Number(args["current-attempt"] ?? 1);
   const maxRuns = Number(args.max);
 
   if (!repo || !prNumber || !currentRunId || !Number.isFinite(maxRuns)) {
     throw new Error(
-      "usage: agent-budget.mjs --repo <owner/name> --pr <n> --current-run <id> --max <n>",
+      "usage: agent-budget.mjs --repo <owner/name> --pr <n> --current-run <id> [--current-attempt <n>] --max <n>",
     );
   }
 
-  const result = collectBudget({ repo, prNumber, currentRunId, maxRuns });
+  const result = collectBudget({
+    repo,
+    prNumber,
+    currentRunId,
+    currentRunAttempt,
+    maxRuns,
+  });
 
   console.log(`allowed=${result.allowed}`);
   console.log(`reason=${result.reason}`);

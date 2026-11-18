@@ -108,10 +108,23 @@ test("other pull requests and issue events do not count", () => {
   );
 });
 
-test("the current run does not count itself", () => {
+test("the current run does not count its own first attempt", () => {
   const runs = [run(CURRENT_RUN)];
 
   assert.equal(evaluate(runs, { [CURRENT_RUN]: jobs() }).count, 0);
+});
+
+test("a Re-run of the current run counts its earlier attempts", () => {
+  const runs = [run(1), run(2), run(CURRENT_RUN, { runAttempt: 2 })];
+
+  assert.deepEqual(
+    evaluate(runs, {
+      1: jobs(),
+      2: jobs(),
+      [CURRENT_RUN]: jobs(),
+    }),
+    { count: 3, allowed: false, reason: "limit_exhausted" },
+  );
 });
 
 test("collectBudget reads the snake_case Actions API shape", () => {
