@@ -16,7 +16,7 @@
 - Single test: `cd backend && go test ./internal/httpapi -run TestHealthEndpoint`; `pnpm --dir frontend test -- src/App.test.tsx`; `pnpm exec playwright test e2e/smoke.spec.ts`.
 - `mise run codegen` — after editing `spec/main.tsp`, regenerate `spec/openapi.yaml` and the Orval client in `frontend/src/api/generated/`.
 - `mise run build:docker` — build the full-stack image that hexlet-check runs; see the Docker layout below.
-- Agent runs in GitHub Actions on a maintainer's comment (`/oc` or `/opencode`) in an issue or PR; the run and its reply are under Actions → `opencode`. Locally the same skills come from `~/.agents/skills`.
+- Agent runs in GitHub Actions on a maintainer's comment (`/oc` or `/opencode`) in an issue or PR, and auto-triages newly opened issues from trusted authors; the run and its reply are under Actions → `opencode`. Locally the same skills come from `~/.agents/skills`.
 
 ## Layout
 
@@ -30,7 +30,7 @@
 - `railway.json` — Railway build/deploy settings: root `Dockerfile`, `/health` healthcheck, no sleep. The service listens on the platform-provided `PORT`.
 - `docs/deploy.md` — deploy runbook: Railway MCP call order, `PORT`/target-port setup, known source-switch and auto-deploy limitations, reseed and acceptance commands.
 - `scripts/check-deploy-config.mjs` — validates the shape of `opencode.json` and `railway.json`; `hk` runs it when either file changes.
-- `.github/workflows/opencode.yml` — interactive GitHub agent: `issue_comment` and `pull_request_review_comment` with `types: [created]`, trusted-author and bot filters, job-level `contents: read`/`id-token: write`/`issues: write`/`pull-requests: write`, `timeout-minutes: 30`, concurrency per issue/PR number. Secret `OPENCODE_API_KEY`, model `opencode/deepseek-v4.1-flash`, `share: false`. Details in the README section "Агент в GitHub".
+- `.github/workflows/opencode.yml` — GitHub agent: interactive `issue_comment` and `pull_request_review_comment` with `types: [created]`, plus auto-triage on `issues` (`types: [opened]`) driven by a `prompt`. Trusted-author and bot filters; issues labelled `ready-for-agent` are skipped. Job-level `contents: read`/`id-token: write`/`issues: write`/`pull-requests: write`, `timeout-minutes: 30` for commands and `15` for triage, concurrency per issue/PR number. Secret `OPENCODE_API_KEY`, model `opencode/deepseek-v4.1-flash`, `share: false`. Details in the README section "Агент в GitHub".
 - `.opencode/skills/` — project copies of `to-spec`, `to-tickets`, `implement-spec` and their dependencies (`tdd`, `code-review`, `codebase-design`), vendored from mattpocock/skills so a clean runner has them; `oxfmt` skips this directory.
 - `mise.toml` — pinned tools, tasks, daemons, postinstall hook. `mise.lock` and the `.mise/locks/` sidecars pin every platform and npm tool graph; commit them together. `hk.pkl` is the shared formatter/linter/test and Git-hook config.
 
@@ -65,7 +65,7 @@ Issues live in GitHub Issues on `kmarenov/ai-for-developers-project-387`, operat
 
 ### GitHub agent
 
-The same skills, `AGENTS.md` and `docs/agents/` run on a clean GitHub Actions runner, so project copies of the skills live in `.opencode/skills/`. Trigger the agent with `/oc <task>` (or `/opencode`) in an issue, PR or review comment; the reply comment and the `opencode` run in Actions are the evidence. Global skills in `~/.agents/skills` are not available on the runner.
+The same skills, `AGENTS.md` and `docs/agents/` run on a clean GitHub Actions runner, so project copies of the skills live in `.opencode/skills/`. Trigger the agent with `/oc <task>` (or `/opencode`) in an issue, PR or review comment; the reply comment and the `opencode` run in Actions are the evidence. New issues from trusted authors are auto-triaged through the `issues` event using the workflow `prompt`; issues labelled `ready-for-agent` are skipped. Global skills in `~/.agents/skills` are not available on the runner.
 
 ### Triage labels
 

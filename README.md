@@ -111,36 +111,43 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 
 ## 🤖 Агент в GitHub
 
-[OpenCode](https://opencode.ai/docs/github/) подключён к репозиторию как GitHub App: команда в issue, PR или в комментарии к строке diff запускает агента внутри GitHub Actions, а ответ появляется комментарием от имени приложения. Раннер использует тот же `AGENTS.md`, `docs/agents/` и скиллы из `.opencode/skills/`, что и локальный агент.
+[OpenCode](https://opencode.ai/docs/github/) подключён к репозиторию как GitHub App: команда в issue, PR или в комментарии к строке diff запускает агента внутри GitHub Actions, а ответ появляется комментарием от имени приложения. Новое issue дополнительно проходит автоматический предварительный разбор. Раннер использует тот же `AGENTS.md`, `docs/agents/` и скиллы из `.opencode/skills/`, что и локальный агент.
 
 - **Воркфлоу:** `.github/workflows/opencode.yml`. Результаты — ответный комментарий в issue/PR со ссылкой `[github run]` и сам прогон в **Actions → opencode** (workflow `opencode`): по ссылке открываются шаги и логи.
-- **События:** `issue_comment` (обсуждение issue или PR) и `pull_request_review_comment` (комментарий к строке diff), у обоих `types: [created]` — редактирование комментария повторный запуск не вызывает. Воркфлоу всегда берётся из `main`, поэтому изменения в нём начинают работать только после мержа.
+- **События:** `issue_comment` (обсуждение issue или PR), `pull_request_review_comment` (комментарий к строке diff) с `types: [created]` и `issues` (`types: [opened]`) для автотриажа. Редактирование комментария повторный запуск не вызывает. Для `issues` нет комментария с инструкцией, поэтому текст задания задан в `prompt` job `triage`. Воркфлоу всегда берётся из `main`, поэтому изменения в нём начинают работать только после мержа.
 - **Команды (`mentions`):** `/oc` и `/opencode` — набор OpenCode по умолчанию, задан в воркфлоу явно. Поиск идёт по подстроке: команда срабатывает в любом месте текста, поэтому цитата `/oc` тоже запускает агента.
+- **Автотриаж:** на новом issue job `triage` читает описание и комментарии, сверяется с кодом и публикует предварительный разбор с вопросами, не меняя код и не создавая спеку и тикеты. Метки ставятся по `docs/agents/triage-labels.md`.
+- **Пропуск готовых тикетов:** issue с меткой `ready-for-agent` (результат `to-spec`/`to-tickets`) автотриаж не разбирает; `prompt` дополнительно перепроверяет метки через `gh issue view`.
 - **Модель:** `opencode/deepseek-v4.1-flash`. Ключ провайдера лежит только в секрете `OPENCODE_API_KEY` (Settings → Secrets and variables → Actions), в файлах и логах его нет.
 - **Назначение:** объяснить issue, собрать спеку и тикеты (`to-spec`, `to-tickets`), реализовать спеку (`implement-spec`), поправить код в PR.
 - **Публикация сессий:** `share: false` — репозиторий публичный, поэтому сессии агента не публикуются и ссылки на них в ответе нет.
 
 Кого агент слушает:
 
-- только участника с `author_association` `OWNER`, `MEMBER` или `COLLABORATOR` — проверка в `if` срабатывает до запуска шагов;
-- команды ботов (`github.event.comment.user.type == 'Bot'`) игнорируются, иначе агент отвечал бы на собственные сообщения;
+- только участника с `author_association` `OWNER`, `MEMBER` или `COLLABORATOR` — проверка в `if` срабатывает до запуска шагов; для команд это автор комментария, для автотриажа — автор issue;
+- ботов (`comment.user.type == 'Bot'` или `issue.user.type == 'Bot'`) игнорирует, иначе агент отвечал бы на собственные сообщения;
+- issue с меткой `ready-for-agent` автотриаж пропускает: это подготовленные тикеты, а не входящие обращения;
 - недоверенные PR из fork не получают секреты: воркфлоу не использует `pull_request_target` и проверяет автора до checkout, а `actions/checkout` берёт основную ветку.
 
 Права, тайм-аут и параллельность:
 
-| Настройка                                | Значение                 | Зачем                                                |
-| :--------------------------------------- | :----------------------- | :--------------------------------------------------- |
-| `contents: read`                         | чтение репозитория       | checkout; push и комментарии делает токен GitHub App |
-| `id-token: write`                        | OIDC-обмен               | токен GitHub App вместо `persist-credentials`        |
-| `issues: write`                          | `GH_TOKEN` для `gh`      | скиллы читают и публикуют issue                      |
-| `pull-requests: write`                   | `GH_TOKEN` для `gh`      | чтение PR и драфт-PR на `implement-spec`             |
-| `persist-credentials: false`             | checkout без credentials | push только токеном приложения                       |
-| `timeout-minutes: 30`                    | тайм-аут задания         | зависший прогон не тратит токены бесконечно          |
-| `concurrency: opencode-<номер issue/PR>` | без отмены               | один агент на обсуждение, повторные команды ждут     |
+| Настройка                                | Значение                 | Зачем                                                         |
+| :--------------------------------------- | :----------------------- | :------------------------------------------------------------ |
+| `contents: read`                         | чтение репозитория       | checkout; push и комментарии делает токен GitHub App          |
+| `id-token: write`                        | OIDC-обмен               | токен GitHub App вместо `persist-credentials`                 |
+| `issues: write`                          | `GH_TOKEN` для `gh`      | скиллы и автотриаж читают и публикуют issue                   |
+| `pull-requests: write`                   | `GH_TOKEN` для `gh`      | чтение PR и драфт-PR на `implement-spec` (только `opencode`)  |
+| `persist-credentials: false`             | checkout без credentials | push только токеном приложения                                |
+| `timeout-minutes: 30`                    | тайм-аут задания         | зависший прогон не тратит токены бесконечно                   |
+| `timeout-minutes: 15`                    | тайм-аут автотриажа      | разбор нового issue не занимает раннер бесконечно             |
+| `concurrency: opencode-<номер issue/PR>` | без отмены               | один агент на обсуждение, автотриаж и команды ждут друг друга |
+
+Job `triage` использует `contents: read`, `id-token: write` и `issues: write`, но не запрашивает `pull-requests: write`.
 
 Скиллы на раннере:
 
 - Раннер стартует с чистого окружения, поэтому проектные копии лежат в `.opencode/skills/`: `to-spec`, `to-tickets`, `implement-spec` и их зависимости `tdd`, `code-review`, `codebase-design`. Каталоги скопированы из [mattpocock/skills](https://github.com/mattpocock/skills) как есть: глобальная установка `~/.agents/skills` на раннере недоступна, поэтому для CI нужны именно файлы в репозитории.
+- Автотриаж не зависит от скилла в `.opencode/skills/`: инструкция целиком лежит в `prompt` job `triage`.
 - Настройки трекера (`AGENTS.md`, `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`) едут вместе с кодом, поэтому на раннере работают `gh issue`, лейблы триажа и правила репозитория.
 - Новый скилл добавляется копированием каталога с `SKILL.md` в `.opencode/skills/<id>/` и коммитом. Скилл, установленный только глобально, в GitHub Actions не появится. Форматтер `oxfmt` каталог `.opencode/skills/**` не трогает, чтобы копии не расходились с оригиналом.
 - Скилл вызывается текстом команды, например: `/oc запусти скилл to-spec по обсуждению этого issue`. Вопросы и решения остаются в обсуждении, и следующая сессия прочитает их перед работой.
@@ -150,6 +157,16 @@ curl -fsS -X POST https://web-main-production-bb7a7b4d.up.railway.app/meeting-ty
 ```bash
 gh issue create --title "Проверка агента" --body "Тестовый issue для /oc"
 gh issue comment <номер> --body "/oc explain this issue"
+```
+
+Для автотриажа:
+
+```bash
+# Новое обращение без меток: ожидается комментарий с разбором
+gh issue create --title "Проверка автотриажа" --body "Тестовое обращение"
+
+# Готовый тикет: прогона и комментария быть не должно
+gh issue create --title "Проверка пропуска" --body "Готовый тикет" --label ready-for-agent
 ```
 
 Ожидается комментарий от приложения и прогон `opencode` в Actions. Если OIDC-обмен не проходит (приложение установлено не на этот репозиторий), воркфлоу нужно переключить на `use_github_token: true`: тогда `GITHUB_TOKEN` передаётся в `env`, ему нужны `contents: write`, `pull-requests: write`, `issues: write`, а checkout идёт с credentials по умолчанию и настроенным Git-пользователем.
