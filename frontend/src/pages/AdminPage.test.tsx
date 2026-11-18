@@ -53,6 +53,7 @@ const bookings: Booking[] = [
     end_time: "2025-11-10T06:30:00.000Z",
     guest_name: "Иван Петров",
     guest_email: "ivan@example.com",
+    topic: "Обсудить проект",
   },
   {
     id: "booking-2",
@@ -61,6 +62,7 @@ const bookings: Booking[] = [
     end_time: "2025-11-10T07:15:00.000Z",
     guest_name: "Мария Смирнова",
     guest_email: "maria@example.com",
+    topic: "",
   },
   {
     id: "booking-3",
@@ -69,6 +71,7 @@ const bookings: Booking[] = [
     end_time: "2025-11-11T06:30:00.000Z",
     guest_name: "Пётр Орлов",
     guest_email: "petr@example.com",
+    topic: "   ",
   },
   {
     id: "booking-4",
@@ -77,6 +80,7 @@ const bookings: Booking[] = [
     end_time: "2025-11-12T06:30:00.000Z",
     guest_name: "Анна Ким",
     guest_email: "anna@example.com",
+    topic: "",
   },
 ];
 
@@ -210,6 +214,54 @@ describe("AdminPage", () => {
     expect(within(row).queryByText(/минут/)).toBeNull();
     expect(within(row).queryByRole("link")).toBeNull();
     expect(within(row).getByText("Анна Ким")).toBeVisible();
+  });
+
+  it("shows a non-empty topic below the guest details", () => {
+    mockSuccess();
+
+    renderPage();
+
+    const [today] = screen.getAllByRole("region");
+    const [row] = within(today).getAllByRole("listitem");
+
+    expect(within(row).getByText("Обсудить проект")).toBeVisible();
+    expect(within(row).getByText("Иван Петров")).toBeVisible();
+    expect(within(row).getByRole("link", { name: "ivan@example.com" })).toBeVisible();
+  });
+
+  it("does not render a topic line for empty or whitespace-only topics", () => {
+    mockSuccess();
+
+    renderPage();
+
+    const rows = screen
+      .getAllByRole("listitem")
+      .filter((row) => /Мария Смирнова|Пётр Орлов/.test(row.textContent ?? ""));
+
+    expect(rows).toHaveLength(2);
+
+    for (const row of rows) {
+      expect(within(row).queryByText("Без темы")).toBeNull();
+      expect(within(row).queryByText("Тема разговора")).toBeNull();
+      expect(within(row).getAllByRole("paragraph")).toHaveLength(4);
+    }
+  });
+
+  it("wraps a long topic instead of breaking the card", () => {
+    const longTopic = "Очень длинная тема разговора ".repeat(8).trim();
+    mockSuccess([
+      {
+        ...bookings[0],
+        topic: longTopic,
+      },
+    ]);
+
+    renderPage();
+
+    const [today] = screen.getAllByRole("region");
+    const [row] = within(today).getAllByRole("listitem");
+
+    expect(within(row).getByText(longTopic)).toHaveClass("break-words");
   });
 
   it("links the guest email with mailto and hides the type description", async () => {

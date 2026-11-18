@@ -194,6 +194,7 @@ components:
         - end_time
         - guest_name
         - guest_email
+        - topic
       properties:
         id:
           type: string
@@ -215,6 +216,10 @@ components:
           type: string
           maxLength: 254
           format: email
+        topic:
+          type: string
+          maxLength: 200
+          description: Optional conversation topic; empty when the guest did not provide one.
     ConfigResponse:
       type: object
       required:
@@ -267,6 +272,10 @@ components:
           type: string
           maxLength: 254
           format: email
+        topic:
+          type: string
+          maxLength: 200
+          description: Optional conversation topic, trimmed and limited to 200 Unicode characters.
     CreateMeetingTypeRequest:
       type: object
       required:

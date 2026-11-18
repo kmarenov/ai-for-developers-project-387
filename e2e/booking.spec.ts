@@ -21,6 +21,7 @@ type Booking = {
   end_time: string;
   guest_name: string;
   guest_email: string;
+  topic: string;
 };
 
 /** Formats an instant for the assertions; independent of the app's date-fns helpers. */
@@ -53,6 +54,7 @@ test("гость записывается на слот, а владелец в�
   const durationMinutes = 30;
   const guestName = `Гость ${testInfo.testId}`;
   const guestEmail = `guest-${testInfo.testId}@example.com`;
+  const topic = `Тема разговора ${testInfo.testId}`;
 
   const meetingTypeResponse = await api.post("/meeting-types", {
     data: { title, description, duration_minutes: durationMinutes },
@@ -93,6 +95,7 @@ test("гость записывается на слот, а владелец в�
 
   await page.getByLabel("Имя", { exact: true }).fill(guestName);
   await page.getByLabel("Email", { exact: true }).fill(guestEmail);
+  await page.getByLabel("Тема разговора (необязательно)", { exact: true }).fill(topic);
   await page.getByRole("button", { name: "Записаться", exact: true }).click();
 
   const success = page.getByRole("status");
@@ -115,6 +118,7 @@ test("гость записывается на слот, а владелец в�
     end_time: slot.end_time,
     guest_name: guestName,
     guest_email: guestEmail,
+    topic,
   });
 
   // The owner sees the same booking in the upcoming-meetings list.
@@ -126,8 +130,90 @@ test("гость записывается на слот, а владелец в�
   await expect(row).toContainText(title);
   await expect(row).toContainText(`${clock(slot.start_time)}–${clock(slot.end_time)}`);
   await expect(row).toContainText(guestName);
+  await expect(row).toContainText(topic);
   await expect(row.getByRole("link", { name: guestEmail })).toHaveAttribute(
     "href",
     `mailto:${guestEmail}`,
   );
+});
+
+test("гость записывается без темы, и владелец не видит строки темы", async ({
+  page,
+  api,
+}, testInfo) => {
+  // Each scenario owns its data: the store is shared with the topic test above.
+  // A fresh meeting type and guest keep this booking independent of it.
+  const title = `Созвон без описания ${testInfo.testId}`;
+  const description = `Тип встречи для E2E-прогона ${testInfo.testId}`;
+  const durationMinutes = 30;
+  const guestName = `Гость ${testInfo.testId}`;
+  const guestEmail = `guest-no-topic-${testInfo.testId}@example.com`;
+
+  const meetingTypeResponse = await api.post("/meeting-types", {
+    data: { title, description, duration_minutes: durationMinutes },
+  });
+  expect(meetingTypeResponse.status()).toBe(201);
+  const meetingType = (await meetingTypeResponse.json()) as MeetingType;
+
+  const slotsResponse = await api.get("/available-slots", {
+    params: { meeting_type_id: meetingType.id },
+  });
+  expect(slotsResponse.status()).toBe(200);
+  const slots = (await slotsResponse.json()) as TimeSlot[];
+  expect(slots.length).toBeGreaterThan(0);
+
+  const [slot] = slots;
+
+  await page.goto("/");
+  await page.getByRole("main").getByRole("link", { name: "Записаться" }).click();
+  await expect(page).toHaveURL(/\/meeting-types$/);
+  await page.getByRole("main").getByRole("link").filter({ hasText: title }).click();
+  await expect(page).toHaveURL(new RegExp(`/meeting-types/${meetingType.id}$`));
+
+  await page
+    .getByRole("region", { name: "Календарь" })
+    .getByRole("button", {
+      name: dayLabel(slot.start_time),
+    })
+    .click();
+
+  const slotsRegion = page.getByRole("region", { name: "Свободные слоты" });
+  const firstSlotButton = slotsRegion.getByRole("button").first();
+  await expect(firstSlotButton).toHaveText(clock(slot.start_time));
+  await firstSlotButton.click();
+
+  const topicField = page.getByLabel("Тема разговора (необязательно)", { exact: true });
+  await expect(topicField).toHaveValue("");
+  await page.getByLabel("Имя", { exact: true }).fill(guestName);
+  await page.getByLabel("Email", { exact: true }).fill(guestEmail);
+  await page.getByRole("button", { name: "Записаться", exact: true }).click();
+
+  const success = page.getByRole("status");
+  await expect(success.getByRole("heading", { name: "Вы записаны" })).toBeVisible();
+  await expect(success).toContainText(guestEmail);
+
+  // Postcondition through the API: the booking exists with an empty topic.
+  const bookingsResponse = await api.get("/bookings");
+  expect(bookingsResponse.status()).toBe(200);
+  const bookings = (await bookingsResponse.json()) as Booking[];
+  const booking = bookings.find(
+    (item) => item.guest_email === guestEmail && item.start_time === slot.start_time,
+  );
+  expect(booking).toMatchObject({
+    meeting_type_id: meetingType.id,
+    guest_name: guestName,
+    guest_email: guestEmail,
+    topic: "",
+  });
+
+  // Without a topic the owner card has no extra line and no «Без темы» placeholder.
+  await page.goto("/admin");
+  await expect(page.getByRole("heading", { name: "Предстоящие встречи" })).toBeVisible();
+
+  const row = page.locator("article").filter({ hasText: guestEmail });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText(title);
+  await expect(row).toContainText(guestName);
+  await expect(row).not.toContainText("Без темы");
+  await expect(row.locator("p")).toHaveCount(4);
 });

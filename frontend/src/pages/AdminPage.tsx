@@ -127,6 +127,7 @@ type BookingRowProps = {
 function BookingRow({ booking, meetingType, timezone, now }: BookingRowProps) {
   const isOngoing =
     Date.parse(booking.start_time) <= now.getTime() && now.getTime() < Date.parse(booking.end_time);
+  const topic = booking.topic?.trim() ?? "";
 
   return (
     <article>
@@ -175,6 +176,8 @@ function BookingRow({ booking, meetingType, timezone, now }: BookingRowProps) {
               <span>{booking.guest_email}</span>
             )}
           </p>
+
+          {topic !== "" ? <p className="text-sm whitespace-pre-wrap break-words">{topic}</p> : null}
         </CardContent>
       </Card>
     </article>

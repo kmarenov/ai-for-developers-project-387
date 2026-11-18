@@ -94,6 +94,10 @@ model Booking {
   @format("email")
   @maxLength(254)
   guest_email: string;
+
+  /** Optional conversation topic; empty when the guest did not provide one. */
+  @maxLength(200)
+  topic: string;
 }
 
 model CreateBookingRequest {
@@ -109,6 +113,10 @@ model CreateBookingRequest {
   @format("email")
   @maxLength(254)
   guest_email: string;
+
+  /** Optional conversation topic, trimmed and limited to 200 Unicode characters. */
+  @maxLength(200)
+  topic?: string;
 }
 
 @error

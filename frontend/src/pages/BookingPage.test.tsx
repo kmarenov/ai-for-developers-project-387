@@ -58,6 +58,7 @@ const booking: Booking = {
   end_time: "2026-11-16T06:30:00Z",
   guest_name: "Иван Петров",
   guest_email: "guest@example.com",
+  topic: "",
 };
 
 function queryResult<T>(data: T) {
@@ -136,10 +137,13 @@ async function selectSlot(user: ReturnType<typeof userEvent.setup>, time = "09:0
 
 async function fillForm(
   user: ReturnType<typeof userEvent.setup>,
-  values: { name?: string; email?: string } = {},
+  values: { name?: string; email?: string; topic?: string } = {},
 ) {
   await user.type(screen.getByLabelText("Имя"), values.name ?? "Иван Петров");
   await user.type(screen.getByLabelText("Email"), values.email ?? "Guest@Example.com");
+  if (values.topic !== undefined) {
+    await user.type(screen.getByLabelText("Тема разговора (необязательно)"), values.topic);
+  }
 }
 
 function submissionError(status: number, code: string) {
@@ -296,6 +300,8 @@ describe("BookingPage", () => {
 
     expect(screen.getByLabelText("Имя")).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.getByLabelText("Тема разговора (необязательно)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Тема разговора (необязательно)")).not.toBeRequired();
     expect(screen.getByText("16 ноября, 09:00–09:30 (МСК)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "09:00" })).toHaveAttribute("aria-pressed", "true");
   });
@@ -347,6 +353,92 @@ describe("BookingPage", () => {
         guest_email: "Guest@Example.com",
       },
     });
+  });
+
+  it("submits a trimmed topic when the guest fills it", async () => {
+    const user = userEvent.setup();
+    const { mutateAsync } = mockCreateBooking();
+    renderPage();
+    await selectSlot(user);
+    await fillForm(user, { topic: "  Обсудить проект  " });
+
+    await user.click(screen.getByRole("button", { name: "Записаться" }));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync).toHaveBeenCalledWith({
+      data: {
+        meeting_type_id: meetingTypeId,
+        start_time: "2026-11-16T06:00:00Z",
+        guest_name: "Иван Петров",
+        guest_email: "Guest@Example.com",
+        topic: "Обсудить проект",
+      },
+    });
+  });
+
+  it("accepts 200 unicode characters even when they need surrogate pairs", async () => {
+    const user = userEvent.setup();
+    const { mutateAsync } = mockCreateBooking();
+    const topic = "😀".repeat(200);
+    renderPage();
+    await selectSlot(user);
+    await fillForm(user, { topic });
+
+    await user.click(screen.getByRole("button", { name: "Записаться" }));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync).toHaveBeenCalledWith({
+      data: {
+        meeting_type_id: meetingTypeId,
+        start_time: "2026-11-16T06:00:00Z",
+        guest_name: "Иван Петров",
+        guest_email: "Guest@Example.com",
+        topic,
+      },
+    });
+  });
+
+  it("omits an empty topic from the request", async () => {
+    const user = userEvent.setup();
+    const { mutateAsync } = mockCreateBooking();
+    renderPage();
+    await selectSlot(user);
+    await fillForm(user, { topic: "   " });
+
+    await user.click(screen.getByRole("button", { name: "Записаться" }));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    const request = mutateAsync.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(request.data).not.toHaveProperty("topic");
+  });
+
+  it("rejects a topic longer than 200 characters without sending the request", async () => {
+    const user = userEvent.setup();
+    const { mutateAsync } = mockCreateBooking();
+    renderPage();
+    await selectSlot(user);
+    await fillForm(user, { topic: "я".repeat(201) });
+
+    await user.click(screen.getByRole("button", { name: "Записаться" }));
+
+    expect(await screen.findByText("Не больше 200 символов")).toBeInTheDocument();
+    expect(screen.getByLabelText("Тема разговора (необязательно)")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("keeps the success screen unchanged when a topic was provided", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectSlot(user);
+    await fillForm(user, { topic: "Обсудить проект" });
+
+    await user.click(screen.getByRole("button", { name: "Записаться" }));
+
+    expect(await screen.findByRole("heading", { name: "Вы записаны" })).toBeInTheDocument();
+    expect(screen.queryByText("Обсудить проект")).toBeNull();
   });
 
   it("disables the form and shows progress while submitting", async () => {

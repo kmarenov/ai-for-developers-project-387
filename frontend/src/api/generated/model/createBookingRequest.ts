@@ -16,4 +16,9 @@ export interface CreateBookingRequest {
   guest_name: string;
   /** @maxLength 254 */
   guest_email: string;
+  /**
+     * Optional conversation topic, trimmed and limited to 200 Unicode characters.
+     * @maxLength 200
+     */
+  topic?: string;
 }

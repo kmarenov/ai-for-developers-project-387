@@ -17,7 +17,10 @@ import (
 	"github.com/kmarenov/ai-for-developers-project-386/backend/internal/timerules"
 )
 
-const maxRequestBodyBytes = 1 << 20
+const (
+	maxRequestBodyBytes = 1 << 20
+	maxTopicRunes       = 200
+)
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
@@ -266,6 +269,7 @@ type createBookingRequest struct {
 	StartTime     *string `json:"start_time"`
 	GuestName     *string `json:"guest_name"`
 	GuestEmail    *string `json:"guest_email"`
+	Topic         *string `json:"topic"`
 }
 
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -402,11 +406,20 @@ func validateCreateBookingRequest(request createBookingRequest) (createBookingIn
 		return createBookingInput{}, false
 	}
 
+	topic := ""
+	if request.Topic != nil {
+		topic = strings.TrimSpace(*request.Topic)
+	}
+	if utf8.RuneCountInString(topic) > maxTopicRunes {
+		return createBookingInput{}, false
+	}
+
 	return createBookingInput{
 		MeetingTypeID: meetingTypeID,
 		StartTime:     startTime.UTC(),
 		GuestName:     guestName,
 		GuestEmail:    guestEmail,
+		Topic:         topic,
 	}, true
 }
 

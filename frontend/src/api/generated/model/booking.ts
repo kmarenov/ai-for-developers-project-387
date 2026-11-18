@@ -18,4 +18,9 @@ export interface Booking {
   guest_name: string;
   /** @maxLength 254 */
   guest_email: string;
+  /**
+     * Optional conversation topic; empty when the guest did not provide one.
+     * @maxLength 200
+     */
+  topic: string;
 }
