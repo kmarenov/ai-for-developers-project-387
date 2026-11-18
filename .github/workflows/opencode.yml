@@ -5,9 +5,8 @@ name: opencode
 # Схема авторизации стандартная: id-token обменивается на токен GitHub App OpenCode,
 # поэтому checkout не сохраняет credentials, а комментарии и push делает приложение.
 #
-# issue_comment опасен тем, что запускается в контексте основной ветки с секретами.
-# Поэтому job фильтрует автора (только OWNER/MEMBER/COLLABORATOR), игнорирует ботов
-# и никогда не запускает код fork: checkout берёт основную ветку, а не PR из fork.
+# Бюджет: job budget считает допущенные запуски по истории Actions до вызова модели.
+# Авторевью живёт отдельно в pr-review.yml и не запускает правки.
 on:
   # jactionlint ignore=dangerous-triggers
   issue_comment:
@@ -17,18 +16,119 @@ on:
   issues:
     types: [opened]
 
+run-name: opencode #${{ github.event.issue.number || github.event.pull_request.number }}
+
 concurrency:
   group: opencode-${{ github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
-  opencode:
+  budget:
     # Только команда из mentions, только от участника с правом записи и никогда от ботов.
+    # Для обычного issue бюджет не нужен: считаются только PR.
     if: |
       github.event_name != 'issues' &&
       github.event.comment.user.type != 'Bot' &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
       (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read # история запусков и run_attempt — источник бюджета
+      contents: read # checkout скрипта подсчёта
+      issues: write # комментарий об исчерпании или инфраструктуре
+      pull-requests: write # комментарий в PR
+    outputs:
+      allowed: ${{ steps.budget.outputs.allowed }}
+      is_pr: ${{ steps.budget.outputs.is_pr }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check budget before model call
+        id: budget
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          IS_PR: ${{ github.event_name == 'pull_request_review_comment' || github.event.issue.pull_request != null }}
+          CURRENT_RUN: ${{ github.run_id }}
+          MAX_RUNS: "3"
+        run: |
+          if [ -z "$OPENCODE_API_KEY" ]; then
+            {
+              echo "allowed=false"
+              echo "reason=infra"
+              echo "count=0"
+              echo "is_pr=$IS_PR"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$IS_PR" != "true" ]; then
+            {
+              echo "allowed=true"
+              echo "reason="
+              echo "count=0"
+              echo "is_pr=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            node scripts/agent-budget.mjs \
+              --repo "$REPO" \
+              --pr "$PR_NUMBER" \
+              --current-run "$CURRENT_RUN" \
+              --max "$MAX_RUNS"
+            echo "is_pr=true"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Report blocked or infrastructure run
+        if: steps.budget.outputs.allowed != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASON: ${{ steps.budget.outputs.reason }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          IS_PR: ${{ steps.budget.outputs.is_pr }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$REASON" = "limit_exhausted" ]; then
+            title="Бюджет запусков исчерпан"
+            detail="Причина: \`limit_exhausted\`. Лимит: 3 допущенных запуска на PR."
+          else
+            title="Агент не запущен: infra"
+            detail="Причина: \`infra\`. Проверьте секрет \`OPENCODE_API_KEY\` и подготовку инструмента."
+          fi
+
+          if [ "$IS_PR" = "true" ]; then
+            sha=$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || echo "unknown")
+          else
+            sha="n/a"
+          fi
+
+          {
+            printf '**%s**\n\n' "$title"
+            printf '%s\n\n' "$detail"
+            printf -- "- Последний SHA: \`%s\`\n" "$sha"
+            printf -- '- Логи: %s\n' "$RUN_URL"
+            printf -- '- Статус: нужен человек\n\n'
+            printf '%s\n' 'Бюджет считается по истории Actions; этот комментарий — только отчёт.'
+          } > /tmp/budget-report.md
+
+          if [ "$IS_PR" = "true" ]; then
+            gh pr comment "$PR_NUMBER" --body-file /tmp/budget-report.md
+          else
+            gh issue comment "$PR_NUMBER" --body-file /tmp/budget-report.md
+          fi
+
+  opencode:
+    needs: budget
+    if: needs.budget.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -52,6 +152,59 @@ jobs:
           model: opencode/deepseek-v4.1-flash
           mentions: "/opencode,/oc"
           share: false
+
+  report:
+    # Итог публикует отдельное задание без модели: тайм-аут, падение агента или
+    # сбой подготовки инструмента. Причину при исчерпании бюджета публикует budget.
+    needs: [budget, opencode]
+    if: |
+      always() &&
+      needs.budget.outputs.allowed == 'true' &&
+      needs.opencode.result != 'success' &&
+      needs.opencode.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Report agent failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.opencode.result }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          IS_PR: ${{ needs.budget.outputs.is_pr }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$RESULT" = "cancelled" ]; then
+            reason="timeout"
+            detail="Причина: \`timeout\`. Задание остановлено по тайм-ауту или отменено."
+          else
+            reason="agent_failed"
+            detail="Причина: \`agent_failed\`. Проверьте логи; при неопределённой причине решение принимает человек."
+          fi
+
+          if [ "$IS_PR" = "true" ]; then
+            sha=$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || echo "unknown")
+          else
+            sha="n/a"
+          fi
+
+          {
+            printf '**Агент завершился без успеха**\n\n'
+            printf '%s\n\n' "$detail"
+            printf -- "- Причина: \`%s\`\n" "$reason"
+            printf -- "- Последний SHA: \`%s\`\n" "$sha"
+            printf -- '- Логи: %s\n' "$RUN_URL"
+            printf -- '- Статус: нужен человек\n'
+          } > /tmp/agent-report.md
+
+          if [ "$IS_PR" = "true" ]; then
+            gh pr comment "$PR_NUMBER" --body-file /tmp/agent-report.md
+          else
+            gh issue comment "$PR_NUMBER" --body-file /tmp/agent-report.md
+          fi
 
   triage:
     # Автотриаж нового issue: только доверенный автор, не бот и не готовый тикет.

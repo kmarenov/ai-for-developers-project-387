@@ -1,0 +1,185 @@
+name: pr-review
+
+# Независимое авторевью: отдельный запуск на pull_request, без продолжения сессии
+# реализации и без правок кода. Запускается только для веток своего репозитория:
+# PR из fork не получает секрет модели. Автора-бота не фильтруем, иначе PR,
+# созданный приложением, останется без ревью.
+#
+# Публикация идёт отдельным шагом через gh pr comment, а не из модели. Ревьюер
+# ограничен чтением: edit и изменяющие shell-команды запрещены настройками агента.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout и REVIEW.md
+      issues: read # исходное обращение, спецификация и согласование
+      actions: read # ссылки на прогоны и артефакты
+      checks: read # результаты CI
+      statuses: read # commit statuses
+      pull-requests: write # комментарий с ревью
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install OpenCode CLI
+        run: |
+          set -euo pipefail
+          version="2.2.7"
+          asset="opencode-linux-x64.tar.gz"
+          base="https://github.com/anomalyco/opencode/releases/download/v${version}"
+          curl -fsSL "${base}/${asset}" -o "/tmp/${asset}"
+          curl -fsSL "${base}/SHA256SUMS" -o /tmp/opencode-SHA256SUMS
+          grep " ${asset}$" /tmp/opencode-SHA256SUMS > /tmp/opencode-expected
+          (cd /tmp && sha256sum -c opencode-expected)
+          mkdir -p "$RUNNER_TEMP/opencode"
+          tar -xzf "/tmp/${asset}" -C "$RUNNER_TEMP/opencode"
+          chmod +x "$RUNNER_TEMP/opencode/opencode"
+          echo "$RUNNER_TEMP/opencode" >> "$GITHUB_PATH"
+
+      - name: Check model key
+        id: key
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          if [ -z "$OPENCODE_API_KEY" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report missing key
+        if: steps.key.outputs.available != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -o pipefail
+          {
+            printf '%s\n\n' '**Авторевью не запущено**'
+            printf '%s\n\n' "Причина: \`infra\` — нет секрета \`OPENCODE_API_KEY\`."
+            printf '%s\n' "Логи: ${RUN_URL}"
+            printf '%s\n' 'Статус: нужен человек.'
+          } | gh pr comment "$PR_NUMBER" --body-file -
+
+      - name: Read review criteria
+        id: criteria
+        if: steps.key.outputs.available == 'true'
+        run: |
+          {
+            echo 'text<<REVIEW_CRITERIA'
+            if [ -f REVIEW.md ]; then
+              cat REVIEW.md
+            else
+              echo 'REVIEW.md отсутствует в этой версии PR.'
+            fi
+            echo 'REVIEW_CRITERIA'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run independent review
+        id: review
+        if: steps.key.outputs.available == 'true'
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REVIEW_CRITERIA: ${{ steps.criteria.outputs.text }}
+        run: |
+          cat > /tmp/review-prompt.md <<PROMPT
+          Ты — независимый ревьюер pull request в репозитории календаря звонков.
+          Не правь код, не создавай коммиты, не пушь и не вызывай команды, меняющие PR.
+          Твой результат — только текст ревью в Markdown.
+
+          Номер PR: #${PR_NUMBER}
+          Проверяемый head SHA: ${HEAD_SHA}
+          Ссылка на прогон: ${RUN_URL}
+
+          Критерии предметной области из REVIEW.md:
+          ${REVIEW_CRITERIA}
+
+          Собери контекст:
+          1. gh pr view ${PR_NUMBER} --json title,body,author,headRefOid,baseRefName,files,commits
+          2. gh pr diff ${PR_NUMBER}
+          3. Найди в теле PR ссылки на исходное обращение, спецификацию, тикеты и согласование
+             человеком; прочитай их через gh issue view <номер> --comments.
+             Если ссылка недоступна или изменение выходит за согласованный объём — отметь пробел.
+          4. gh pr checks ${PR_NUMBER} и, если нужно, gh run list --limit 10.
+             Зафиксируй статус CI на момент ревью. Артефакт E2E может появиться позже —
+             это проверяет человек перед мержем.
+          5. Прочитай уже оставленные комментарии через gh pr view ${PR_NUMBER} --comments.
+             Не повторяй закрытые замечания; проверь, исправлены ли они в новой версии.
+
+          Требования к ответу:
+          - Сверь diff со спецификацией и критериями, проверь основной, негативный и соседний сценарии.
+          - Каждое замечание: файл, строка, условие возникновения ошибки, последствие.
+          - Не комментируй форматирование и стиль: это проверяет линтер.
+          - Если подтверждённых дефектов нет, прямо напиши: «Подтверждённых дефектов не найдено».
+          - В конце укажи проверенный head SHA и статус CI.
+          - Не вставляй команду /oc: интерактивный агент запускается только человеком.
+          PROMPT
+
+          if ! opencode run --agent pr-reviewer --model opencode/deepseek-v4.1-flash --format default --auto --archived "$(cat /tmp/review-prompt.md)" > review.md 2> review.err; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ ! -s review.md ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Report review failure
+        if: steps.key.outputs.available == 'true' && steps.review.outputs.ready != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -o pipefail
+          {
+            printf '%s\n\n' '**Авторевью не завершилось**'
+            printf '%s\n\n' "Причина: \`infra\` или \`agent_failed\`."
+            printf '%s\n' "Логи: ${RUN_URL}"
+            printf '%s\n' 'Статус: нужен человек.'
+            if [ -s review.err ]; then
+              printf '\n%s\n' '```text'
+              tail -40 review.err
+              printf '%s\n' '```'
+            fi
+          } | gh pr comment "$PR_NUMBER" --body-file -
+
+      - name: Publish review
+        if: steps.key.outputs.available == 'true' && steps.review.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            cat review.md
+            printf '\n\n---\n'
+            printf '%s\n' "Проверенный SHA: \`${HEAD_SHA}\`."
+          } > review-final.md
+          gh pr comment "$PR_NUMBER" --body-file review-final.md

@@ -41,6 +41,10 @@ steps {
   ["test"] {
     check = "mise run test"
   }
+  ["agent-budget"] {
+    glob = List("scripts/agent-budget.mjs", "scripts/agent-budget.test.mjs")
+    check = "node --test scripts/agent-budget.test.mjs"
+  }
 }
 
 hooks {

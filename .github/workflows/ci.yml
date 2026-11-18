@@ -2,12 +2,16 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -17,7 +21,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # На pull_request checkout без ref берёт временный merge-коммит.
+          # Для проверки версии автора явно берём head SHA PR.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      - name: Record checked-out SHA
+        run: |
+          mkdir -p artifacts
+          sha="$(git rev-parse HEAD)"
+          printf '%s\n' "$sha" | tee artifacts/head-sha.txt
+          printf '### Проверенный commit: %s\n' "$sha" >> "$GITHUB_STEP_SUMMARY"
+
       - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
       - name: Scan Git history for secrets
         run: mise run secrets
@@ -29,12 +44,13 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
       - run: mise run check
-      - name: Upload Playwright report
+      - name: Upload Playwright report and verified SHA
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: playwright-report
+          name: e2e-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
+            artifacts/head-sha.txt
             playwright-report/
             test-results/
           retention-days: 7
