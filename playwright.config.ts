@@ -31,7 +31,9 @@ export default defineConfig({
     baseURL: frontendUrl,
     locale: "ru-RU",
     timezoneId: "Europe/Moscow",
-    trace: "on-first-retry",
+    // В CI trace нужен и для успешного прогона: это артефакт независимой
+    // браузерной проверки версии из точного head SHA PR.
+    trace: CI ? "on" : "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
